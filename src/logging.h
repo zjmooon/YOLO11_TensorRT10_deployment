@@ -25,7 +25,6 @@
 #include <ostream>
 #include <sstream>
 #include <string>
-#include "macros.h"
 
 using Severity = nvinfer1::ILogger::Severity;
 

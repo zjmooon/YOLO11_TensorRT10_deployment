@@ -16,7 +16,7 @@ class Logger : public nvinfer1::ILogger {
 
 int main()
 { 
-    string video_path = "../frame.mp4"; 
+    std::string video_path = "../frame.mp4"; 
     // init model
     YOLOv11 model("../Models/yolo11n.trt", logger);
 
@@ -26,12 +26,12 @@ int main()
 
         while (1)
         {
-            Mat image;
+            cv::Mat image;
             cap >> image;
 
             if (image.empty()) break;
 
-            vector<Detection> objects;
+            std::vector<Detection> objects;
             model.preprocess(image);
 
             auto start = std::chrono::system_clock::now();
@@ -49,7 +49,7 @@ int main()
         }
 
         // Release resources
-        destroyAllWindows();
+        cv::destroyAllWindows();
         cap.release();
     }
     // else {

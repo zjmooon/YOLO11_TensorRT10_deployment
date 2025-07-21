@@ -1,7 +1,5 @@
 #include "yolov11.h"
 #include "logging.h"
-#include "cuda_utils.h"
-#include "macros.h"
 #include "preprocess.h"
 #include <NvOnnxParser.h>
 #include "common.h"
@@ -12,7 +10,7 @@
 static Logger logger;
 
 
-YOLOv11::YOLOv11(string model_path, nvinfer1::ILogger& logger)
+YOLOv11::YOLOv11(std::string model_path, nvinfer1::ILogger& logger)
 {
     init(model_path, logger);
 }
@@ -21,31 +19,26 @@ YOLOv11::YOLOv11(string model_path, nvinfer1::ILogger& logger)
 void YOLOv11::init(std::string engine_path, nvinfer1::ILogger& logger)
 {
     // Read the engine file
-    ifstream engineStream(engine_path, ios::binary);
-    engineStream.seekg(0, ios::end);
+    std::ifstream engineStream(engine_path, std::ios::binary);
+    engineStream.seekg(0, std::ios::end);
     const size_t modelSize = engineStream.tellg();
-    engineStream.seekg(0, ios::beg);
-    unique_ptr<char[]> engineData(new char[modelSize]);
+    engineStream.seekg(0, std::ios::beg);
+    std::unique_ptr<char[]> engineData(new char[modelSize]);
     engineStream.read(engineData.get(), modelSize);
     engineStream.close();
 
-    // Deserialize the tensorrt engine
-    runtime = createInferRuntime(logger);
-    engine = runtime->deserializeCudaEngine(engineData.get(), modelSize);
-    context = engine->createExecutionContext();
-
     // Get input and output sizes of the model
-    const char* inputName = engine->getIOTensorName(0);
-    int dimNums = engine->getNbIOTensors();
-    const char* outputName = engine->getIOTensorName(dimNums - 1);
-    Dims input_dims = engine->getTensorShape(inputName);
+    const char* inputName = engine_->getIOTensorName(0);
+    int dimNums = engine_->getNbIOTensors();
+    const char* outputName = engine_->getIOTensorName(dimNums - 1);
+    nvinfer1::Dims input_dims = engine_->getTensorShape(inputName);
     input_h = input_dims.d[2];
     input_w = input_dims.d[3];
-    Dims output_dims = engine->getTensorShape(outputName); // 1 300 6
+    nvinfer1::Dims output_dims = engine_->getTensorShape(outputName); // 1 300 6
     num_detections = output_dims.d[1];
     detection_attribute_size = output_dims.d[2];
 
-    std::cout << engine->getNbIOTensors() << std::endl;   // 2, 打印模型所有dims包括输入输出
+    std::cout << engine_->getNbIOTensors() << std::endl;   // 2, 打印模型所有dims包括输入输出
 
     // inputName=images, input_dims.nbDims=4
     std::cout << "inputName=" << inputName << ", input_dims.nbDims=" << input_dims.nbDims << std::endl;    // 4, 输入张量的元素的个数 NCHW
@@ -63,61 +56,47 @@ void YOLOv11::init(std::string engine_path, nvinfer1::ILogger& logger)
 
 
     // Initialize input buffers
-    cpu_output_buffer = new float[detection_attribute_size * num_detections];
-    CUDA_CHECK(cudaMalloc(&gpu_buffers[0], 3 * input_w * input_h * sizeof(float)));
+    cpu_outpu_.reserve(detection_attribute_size * num_detections);
+    CUDA_CHECK(cudaMalloc(reinterpret_cast<void **>(gpu_input_.get()), 3 * input_w * input_h * sizeof(float)));
     // Initialize output buffer
-    CUDA_CHECK(cudaMalloc(&gpu_buffers[1], detection_attribute_size * num_detections * sizeof(float)));
+    CUDA_CHECK(cudaMalloc(reinterpret_cast<void **>(gpu_output_.get()), detection_attribute_size * num_detections * sizeof(float)));
 
     cuda_preprocess_init(MAX_IMAGE_SIZE);
 
-    CUDA_CHECK(cudaStreamCreate(&stream));
-
     // 绑定输入输出gpu显存
-    context->setTensorAddress(engine->getIOTensorName(0), gpu_buffers[0]);
-    context->setTensorAddress(engine->getIOTensorName(engine->getNbIOTensors() - 1), gpu_buffers[1]);
-
-
+    context_->setTensorAddress(engine_->getIOTensorName(0), gpu_input_.get());
+    context_->setTensorAddress(engine_->getIOTensorName(engine_->getNbIOTensors() - 1), gpu_output_.get());
 }
 
 YOLOv11::~YOLOv11()
 {
-    // Release stream and buffers
-    CUDA_CHECK(cudaStreamSynchronize(stream));
-    CUDA_CHECK(cudaStreamDestroy(stream));
-    for (int i = 0; i < 2; i++)
-        CUDA_CHECK(cudaFree(gpu_buffers[i]));
-    delete[] cpu_output_buffer;
 
-    // Destroy the engine
-    cuda_preprocess_destroy();
-    delete context;
-    delete engine;
-    delete runtime;
 }
 
-void YOLOv11::preprocess(Mat& image) {
+void YOLOv11::preprocess(cv::Mat& image) {
     // Preprocessing data on gpu
-    cuda_preprocess(image.ptr(), image.cols, image.rows, gpu_buffers[0], input_w, input_h, stream);
-    CUDA_CHECK(cudaStreamSynchronize(stream));
+
+    cuda_preprocess(image.ptr(), image.cols, image.rows, gpu_input_.get(), input_w, input_h, *stream_);
+    CUDA_CHECK(cudaStreamSynchronize(*stream_));
 }
 
 void YOLOv11::infer()
 {
 //     context->enqueueV2((void**)gpu_buffers, stream, nullptr);
 
-    this->context->enqueueV3(this->stream);
-    CUDA_CHECK(cudaStreamSynchronize(stream));
+    this->context_->enqueueV3(*stream_);
+    CUDA_CHECK(cudaStreamSynchronize(*stream_));
 }
 
-void YOLOv11::postprocess(vector<Detection>& output)
+void YOLOv11::postprocess(std::vector<Detection>& output)
 {
     // Memcpy from device output buffer to host output buffer
-    CUDA_CHECK(cudaMemcpyAsync(cpu_output_buffer, gpu_buffers[1], num_detections * detection_attribute_size * sizeof(float), cudaMemcpyDeviceToHost, stream));
-    CUDA_CHECK(cudaStreamSynchronize(stream));
+    cudaMemcpyAsync(cpu_outpu_.data(), gpu_output_.get(), num_detections * detection_attribute_size * sizeof(float), cudaMemcpyDeviceToHost, *stream_);
+    CUDA_CHECK(cudaStreamSynchronize(*stream_));
 
-    vector<Rect> boxes;
-    vector<int> class_ids;
-    vector<float> confidences;
+    std::vector<cv::Rect> boxes;
+    std::vector<int> class_ids;
+    std::vector<float> confidences;
 
     // const Mat det_output(detection_attribute_size, num_detections, CV_32F, cpu_output_buffer);
     for (int i=0; i<12; ++i) {

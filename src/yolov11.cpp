@@ -27,6 +27,25 @@ void YOLOv11::init(std::string engine_path, nvinfer1::ILogger& logger)
     engineStream.read(engineData.get(), modelSize);
     engineStream.close();
 
+    // For runtime
+    runtime_.reset(nvinfer1::createInferRuntime(logger));
+    if (runtime_.get() == nullptr) {
+        std::cout << "Failed to create infer runtime" << std::endl;
+        return;
+    }
+    // For engine
+    engine_.reset(runtime_->deserializeCudaEngine(engineData.get(), modelSize));
+    if (engine_.get() == nullptr) {
+        std::cout << "Failed to create infer engine" << std::endl;
+        return;
+    }
+    // For context 
+    context_.reset(engine_->cretaeExecutionContext());
+    if (context_.get() == nullptr) {
+        std::cout << "Failed to create infer context" << std::endl;
+        return;
+    }
+
     // Get input and output sizes of the model
     const char* inputName = engine_->getIOTensorName(0);
     int dimNums = engine_->getNbIOTensors();
@@ -41,7 +60,7 @@ void YOLOv11::init(std::string engine_path, nvinfer1::ILogger& logger)
     std::cout << engine_->getNbIOTensors() << std::endl;   // 2, 打印模型所有dims包括输入输出
 
     // inputName=images, input_dims.nbDims=4
-    std::cout << "inputName=" << inputName << ", input_dims.nbDims=" << input_dims.nbDims << std::endl;    // 4, 输入张量的元素的个数 NCHW
+    std::cout << "inputName=" << inputName << ", input_dims.nbDims=" << input_dims.nbDims << std::endl;    // 4, 输入张量的元素的个数 BCHW
     for (const auto &x : input_dims.d ) {
         std::cout << x << " "; // 1 3 640 640 0 0 0 0 
     }
@@ -56,9 +75,11 @@ void YOLOv11::init(std::string engine_path, nvinfer1::ILogger& logger)
 
 
     // Initialize input buffers
-    cpu_outpu_.reserve(detection_attribute_size * num_detections);
+    cpu_outpu_.resize(detection_attribute_size * num_detections);
+    gpu_input_.reset();
     CUDA_CHECK(cudaMalloc(reinterpret_cast<void **>(gpu_input_.get()), 3 * input_w * input_h * sizeof(float)));
     // Initialize output buffer
+    gpu_output_.reset();
     CUDA_CHECK(cudaMalloc(reinterpret_cast<void **>(gpu_output_.get()), detection_attribute_size * num_detections * sizeof(float)));
 
     cuda_preprocess_init(MAX_IMAGE_SIZE);

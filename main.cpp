@@ -2,25 +2,20 @@
 #include <string>
 #include "yolov11.h"
 
-
-/**
- * @brief Setting up Tensorrt logger
-*/
-class Logger : public nvinfer1::ILogger {
-    void log(Severity severity, const char* msg) noexcept override {
-        // Only output logs with severity greater than warning
-        if (severity <= Severity::kWARNING)
-            std::cout << msg << std::endl;
-    }
-}logger;
-
 int main()
 { 
-    std::string video_path = "../frame.mp4"; 
+    std::string video_path = "../bubble.mp4"; 
     // init model
-    YOLOv11 model("../Models/yolo11n.trt", logger);
+    YOLOv11 model("../Models/yolo11n_fp16.trt");
 
-    if (true) {
+    if (true){
+        cv::Mat img = cv::imread("../car.jpg");
+        if (img.empty()) std::cerr << "Error reading image: " << std::endl;
+        model.infer(img);
+    }
+    
+
+    if (false) {
         //path to video
         cv::VideoCapture cap(video_path);
 
@@ -31,14 +26,14 @@ int main()
 
             if (image.empty()) break;
 
-            std::vector<Detection> objects;
-            model.preprocess(image);
+            // std::vector<Detection> objects;
+            // model.preprocess(image);
 
             auto start = std::chrono::system_clock::now();
-            model.infer();
+            model.infer(image);
             auto end = std::chrono::system_clock::now();
 
-            model.postprocess(objects);
+            // model.postprocess(objects);
             // model.draw(image, objects);
 
             // auto tc = (double)std::chrono::duration_cast<std::chrono::microseconds>(end - start).count() / 1000.;

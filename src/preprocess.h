@@ -1,11 +1,8 @@
 #pragma once
 
 #include <cuda_runtime.h>
-#include <cstdint>
 #include <opencv2/opencv.hpp>
 
-void cuda_preprocess_init(int max_image_size);
-void cuda_preprocess_destroy();
-void cuda_preprocess(uint8_t* src, int src_width, int src_height,
-    float* dst, int dst_width, int dst_height,
-    cudaStream_t stream);
+void preprocess_resize_gpu(cv::Mat &h_src, float* d_dst, int dst_h, int dst_w, cudaStream_t stream);
+void resize_bilinear_gpu(float* d_dst, uint8_t* d_src, int dst_h, int dst_w, int width, 
+    int height, cudaStream_t stream);

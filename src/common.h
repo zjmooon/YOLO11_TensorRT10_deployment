@@ -1,3 +1,9 @@
+#ifndef COMMON_H
+#define COMMON_H
+
+#include <cuda_runtime_api.h>
+#include "NvInfer.h"
+
 const std::vector<std::string> CLASS_NAMES = {
     "person",         "bicycle",    "car",           "motorcycle",    "airplane",     "bus",           "train",
     "truck",          "boat",       "traffic light", "fire hydrant",  "stop sign",    "parking meter", "bench",
@@ -27,3 +33,62 @@ const std::vector<std::vector<unsigned int>> COLORS = {
     {0, 0, 128},     {0, 0, 170},     {0, 0, 212},     {0, 0, 255},     {0, 0, 0},       {36, 36, 36},
     {73, 73, 73},    {109, 109, 109}, {146, 146, 146}, {182, 182, 182}, {219, 219, 219}, {0, 114, 189},
     {80, 183, 189},  {128, 128, 0} };
+
+#define CEIL(x, y) (((x) + (y) - 1) / (y))
+
+#define CUDA_CHECK(callstr)\
+    {\
+        cudaError_t error_code = callstr;\
+        if (error_code != cudaSuccess) {\
+            std::cerr << "CUDA error " << error_code << " at " << __FILE__ << ":" << __LINE__;\
+            assert(0);\
+        }\
+    }
+
+
+struct InferDeleter
+{
+    template <typename T>
+    void operator()(T* obj) const {
+        if (obj) delete obj;
+    } 
+};
+
+static auto StreamDeleter = [](cudaStream_t* pStream)
+{
+    if (pStream) {
+        static_cast<void>(cudaStreamDestroy(*pStream));
+        delete pStream;
+    }
+};
+
+inline std::unique_ptr<cudaStream_t, decltype(StreamDeleter)> makeCudaStream()
+{
+    std::unique_ptr<cudaStream_t, decltype(StreamDeleter)> pStream(new cudaStream_t, StreamDeleter);
+    if (cudaStreamCreateWithFlags(pStream.get(), cudaStreamNonBlocking) != cudaSuccess)
+    {
+        pStream.reset(nullptr);
+    }
+
+    return pStream;
+}
+
+struct BufferDeleter 
+{
+    template <typename T>
+    void operator()(T* ptr) const {
+        if (ptr) {
+            cudaFree(ptr);  
+        }
+    }
+};
+
+class Logger : public nvinfer1::ILogger {
+    void log(Severity severity, const char* msg) noexcept override {
+        // Only output logs with severity greater than warning
+        if (severity <= Severity::kWARNING)
+            std::cout << msg << std::endl;
+    }
+};
+
+#endif

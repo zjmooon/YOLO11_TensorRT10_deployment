@@ -5,7 +5,7 @@ project(yolov11-tensorrt LANGUAGES CXX CUDA)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-# CUDA 编译选项（可选）
+# CUDA 编译选项
 set(CMAKE_CUDA_STANDARD 14)
 set(CMAKE_CUDA_STANDARD_REQUIRED ON)
 
@@ -31,7 +31,7 @@ set(SOURCES
     src/preprocess.cu
 )
 
-# 添加可执行文件（.cu 文件可以直接和 .cpp 混编）
+# 添加可执行文件
 add_executable(${PROJECT_NAME} ${SOURCES})
 
 # 链接依赖库

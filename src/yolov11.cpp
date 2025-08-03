@@ -54,21 +54,21 @@ void YOLOv11::init(std::string engine_path)
     num_detections = output_dims.d[1];
     detection_attribute_size = output_dims.d[2];
 
-    std::cout << "IOTensors num: " << engine_->getNbIOTensors() << std::endl;   // 打印模型所有dims包括输入输出
+    // std::cout << "IOTensors num: " << engine_->getNbIOTensors() << std::endl;   // 打印模型所有dims包括输入输出
 
     // inputName=images, input_dims.nbDims=4
-    std::cout << "inputName=" << inputName << ", input_dims.nbDims=" << input_dims.nbDims << std::endl;    // 输入张量的元素的个数 BCHW
-    for (const auto &x : input_dims.d ) {
-        std::cout << x << " "; // 1 3 640 640
-    }
-    std::cout << std::endl;
+    // std::cout << "inputName=" << inputName << ", input_dims.nbDims=" << input_dims.nbDims << std::endl;    // 输入张量的元素的个数 BCHW
+    // for (const auto &x : input_dims.d ) {
+    //     std::cout << x << " "; // 1 3 640 640
+    // }
+    // std::cout << std::endl;
 
     // outputName=output0, output_dims.nbDims=3
-    std::cout << "outputName=" << outputName << ", output_dims.nbDims=" << output_dims.nbDims << std::endl;
-    for (const auto &x : output_dims.d) {
-        std::cout << x << " ";  // 1 84 8400 or 1x300x6
-    }
-    std::cout << std::endl;
+    // std::cout << "outputName=" << outputName << ", output_dims.nbDims=" << output_dims.nbDims << std::endl;
+    // for (const auto &x : output_dims.d) {
+    //     std::cout << x << " ";  // 1 84 8400 or 1x300x6
+    // }
+    // std::cout << std::endl;
 
 
     // assume the box outputs no more than 1000 boxes that conf >= nms; (1000)
@@ -121,10 +121,10 @@ void YOLOv11::postprocess()
 
     parseDetections(cpu_outpu_.data(), detections_boxes_);
 
-    for (const auto& x : detections_boxes_) {
-        std::cout << x.x0   << " " << x.y0 << " " << x.x1 << " " << x.y1 << " " 
-                  << x.conf << " " << x.class_id  << std::endl;
-    }
+    // for (const auto& x : detections_boxes_) {
+    //     std::cout << x.x0   << " " << x.y0 << " " << x.x1 << " " << x.y1 << " " 
+    //               << x.conf << " " << x.class_id  << std::endl;
+    // }
 }
 
 void YOLOv11::draw(cv::Mat& image)
@@ -147,9 +147,10 @@ void YOLOv11::draw(cv::Mat& image)
     }
 
     // save inferd img
-    std::string result_path = makeOutputPath(input_image_path_, "../results");
-    // result_path = "../../results/car.jpg"
-    cv::imwrite(result_path , image);
+    // std::string result_path = makeOutputPath(input_image_path_, "../results");
+    // // result_path = "../../results/car.jpg"
+    // cv::imwrite("ggg.jpg" , image);
+    detections_boxes_.clear();
 }
 
 void YOLOv11::parseDetections(const float *output, std::vector<Detection> &detections)

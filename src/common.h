@@ -53,7 +53,7 @@ struct InferDeleter
     } 
 };
 
-static auto StreamDeleter = [](cudaStream_t* pStream)
+inline static auto StreamDeleter = [](cudaStream_t* pStream)
 {
     if (pStream) {
         static_cast<void>(cudaStreamDestroy(*pStream));

@@ -7,17 +7,19 @@ int main()
     // init model
     YOLOv11 model("../Models/yolo11l_fp16.trt");
 
-    if (true){
+    if (false){
         model.input_image_path_ = "../asset/crossroad.jpg";
-        cv::Mat img = cv::imread(model.input_image_path_);
-        if (img.empty()) std::cerr << "Error reading image: " << std::endl;
-        model.infer(img);
+        cv::Mat image = cv::imread(model.input_image_path_);
+        if (image.empty()) std::cerr << "Error reading image: " << std::endl;
+        model.infer(image);
+
+        cv::imshow("prediction", image);
+        cv::waitKey(0);
     }
     
 
-    if (false) {
-        std::string video_path = "../bubble.mp4"; 
-        //path to video
+    if (true) {
+        std::string video_path = "../asset/road1.mp4"; 
         cv::VideoCapture cap(video_path);
 
         while (1)
@@ -25,17 +27,16 @@ int main()
             cv::Mat image;
             cap >> image;
 
-            if (image.empty()) break;
-
-            // std::vector<Detection> objects;
-            // model.preprocess(image);
+            if (image.empty()) std::cerr << "Error reading image: " << std::endl;
 
             auto start = std::chrono::system_clock::now();
             model.infer(image);
             auto end = std::chrono::system_clock::now();
             auto tc = (double)std::chrono::duration_cast<std::chrono::microseconds>(end - start).count() / 1000.;
-            printf("cost %2.4lf ms\n", tc);
+            std::cout << tc << "ms" << std::endl;
 
+            cv::imshow("prediction", image);
+            cv::waitKey(1);
         }
 
         // Release resources

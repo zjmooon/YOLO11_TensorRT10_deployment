@@ -6,9 +6,8 @@
 
 struct Detection
 {
-    float conf;
+    float x0, y0, x1, y1, conf;
     int class_id;
-    cv::Rect bbox;
 };
 
 class YOLOv11
@@ -19,10 +18,8 @@ public:
     YOLOv11(std::string model_path);
     ~YOLOv11();
 
-    void infer(cv::Mat& image);
-    void postprocess(std::vector<Detection>& output);
-    void draw(cv::Mat& image, const std::vector<Detection>& output);
-
+    void infer(cv::Mat &img);
+    std::string input_image_path_;
 private:
     void init(std::string engine_path);
 
@@ -38,13 +35,18 @@ private:
     std::unique_ptr<cudaStream_t, decltype(StreamDeleter)> stream_ = makeCudaStream();
 
     void preprocess(cv::Mat& image);
+    void postprocess();
+    void draw(cv::Mat& image);
+    void parseDetections(const float* output, std::vector<Detection>& result);
 
     // Model parameters
     int input_w;
     int input_h;
     int num_detections;
     int detection_attribute_size;
-    float conf_threshold = 0.4f;
+    float conf_threshold_ = 0.4f;
+    std::vector<Detection> detections_boxes_;
+    
 
     std::vector<cv::Scalar> colors;
 

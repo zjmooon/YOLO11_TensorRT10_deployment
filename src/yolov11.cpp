@@ -6,12 +6,12 @@
 
 
 static Logger logger;
+const int MAX_IMAGE_SIZE = 4096 * 4096;
 
 YOLOv11::YOLOv11(std::string model_path)
 {
     init(model_path);
 }
-
 
 void YOLOv11::init(std::string engine_path)
 {
@@ -54,7 +54,7 @@ void YOLOv11::init(std::string engine_path)
     num_detections = output_dims.d[1];
     detection_attribute_size = output_dims.d[2];
 
-    std::cout << engine_->getNbIOTensors() << std::endl;   // 打印模型所有dims包括输入输出
+    std::cout << "IOTensors num: " << engine_->getNbIOTensors() << std::endl;   // 打印模型所有dims包括输入输出
 
     // inputName=images, input_dims.nbDims=4
     std::cout << "inputName=" << inputName << ", input_dims.nbDims=" << input_dims.nbDims << std::endl;    // 输入张量的元素的个数 BCHW
@@ -84,135 +84,105 @@ void YOLOv11::init(std::string engine_path)
     CUDA_CHECK(cudaMalloc(reinterpret_cast<void**>(&raw_ptr), detection_attribute_size * num_detections * sizeof(float)));
     gpu_output_.reset(raw_ptr);
 
-    // gpu_input_.reset();
-    // CUDA_CHECK(cudaMalloc(reinterpret_cast<void **>(gpu_input_.get()), 3 * input_w * input_h * sizeof(float)));
-    // Initialize output buffer
-    // gpu_output_.reset();
-    // CUDA_CHECK(cudaMalloc(reinterpret_cast<void **>(gpu_output_.get()), detection_attribute_size * num_detections * sizeof(float)));
+    detections_boxes_.reserve(num_detections);
+
+    // cuda_preprocess_init(MAX_IMAGE_SIZE);
 }
 
-YOLOv11::~YOLOv11()
-{
-
+YOLOv11::~YOLOv11(){
+    // cuda_preprocess_destroy();
 }
 
 void YOLOv11::preprocess(cv::Mat& image) {
     // Preprocessing data on gpu
-    preprocess_resize_gpu(image, gpu_input_.get(), input_h, input_w, *stream_);
-
-    // int img_size = image.cols * image.rows * 3;
-    // cudaMemcpyAsync(gpu_input_.get(), image.ptr(), img_size, cudaMemcpyHostToDevice, *stream_);
-    // CUDA_CHECK(cudaStreamSynchronize(*stream_));
-
-    // cuda_preprocess(gpu_input_.get(), image.cols, image.rows, gpu_input_.get(), input_w, input_h, *stream_);
-    // CUDA_CHECK(cudaStreamSynchronize(*stream_));
+    preprocess::preprocess_resize_gpu(image, gpu_input_.get(), input_h, input_w, *stream_);
+    // cuda_preprocess(image.ptr(), image.cols, image.rows, gpu_input_.get(), input_w, input_h, *stream_);
 }
 
-void YOLOv11::infer(cv::Mat& image)
+void YOLOv11::infer(cv::Mat &img)
 {
-    preprocess(image);
+    preprocess(img);
     CUDA_CHECK(cudaStreamSynchronize(*stream_));
 
-    // 绑定输入输出gpu显存
+    // bingding GPU input&output
     context_->setTensorAddress(engine_->getIOTensorName(0), gpu_input_.get());
     context_->setTensorAddress(engine_->getIOTensorName(engine_->getNbIOTensors() - 1), gpu_output_.get());
     context_->enqueueV3(*stream_);
     CUDA_CHECK(cudaStreamSynchronize(*stream_));
 
-    std::vector<Detection> objects;
-    postprocess(objects);
-    draw(image, objects);
+    postprocess();
+    draw(img);
 }
 
-void YOLOv11::postprocess(std::vector<Detection>& output)
+void YOLOv11::postprocess()
 {
     // Memcpy from device output buffer to host output buffer
     cudaMemcpyAsync(cpu_outpu_.data(), gpu_output_.get(), num_detections * detection_attribute_size * sizeof(float), cudaMemcpyDeviceToHost, *stream_);
-    CUDA_CHECK(cudaStreamSynchronize(*stream_));
 
-    std::vector<cv::Rect> boxes;
-    std::vector<int> class_ids;
-    std::vector<float> confidences;
+    parseDetections(cpu_outpu_.data(), detections_boxes_);
 
-    // const Mat det_output(detection_attribute_size, num_detections, CV_32F, cpu_output_buffer);
-    for (int i=0; i<12; ++i) {
-        std::cout << cpu_outpu_[i] << " ";
+    for (const auto& x : detections_boxes_) {
+        std::cout << x.x0   << " " << x.y0 << " " << x.x1 << " " << x.y1 << " " 
+                  << x.conf << " " << x.class_id  << std::endl;
     }
-    std::cout << std::endl;
-
-
-    // for (int i = 0; i < det_output.cols; ++i) {
-    //     // const Mat classes_scores = det_output.col(i).rowRange(4, 4 + num_classes);
-    //     Point class_id_point;
-    //     double score;
-    //     minMaxLoc(classes_scores, nullptr, &score, nullptr, &class_id_point);
-
-    //     if (score > conf_threshold) {
-    //         const float cx = det_output.at<float>(0, i);
-    //         const float cy = det_output.at<float>(1, i);
-    //         const float ow = det_output.at<float>(2, i);
-    //         const float oh = det_output.at<float>(3, i);
-    //         Rect box;
-    //         box.x = static_cast<int>((cx - 0.5 * ow));
-    //         box.y = static_cast<int>((cy - 0.5 * oh));
-    //         box.width = static_cast<int>(ow);
-    //         box.height = static_cast<int>(oh);
-
-    //         boxes.push_back(box);
-    //         class_ids.push_back(class_id_point.y);
-    //         confidences.push_back(score);
-    //     }
-    // }
-
-    // vector<int> nms_result;
-    // dnn::NMSBoxes(boxes, confidences, conf_threshold, nms_threshold, nms_result);
-
-    // for (int i = 0; i < nms_result.size(); i++)
-    // {
-    //     Detection result;
-    //     int idx = nms_result[i];
-    //     result.class_id = class_ids[idx];
-    //     result.conf = confidences[idx];
-    //     result.bbox = boxes[idx];
-    //     output.push_back(result);
-    // }
 }
 
-void YOLOv11::draw(cv::Mat& image, const std::vector<Detection>& output)
+void YOLOv11::draw(cv::Mat& image)
 {
-    const float ratio_h = input_h / (float)image.rows;
-    const float ratio_w = input_w / (float)image.cols;
-
-    for (int i = 0; i < output.size(); i++)
+    for (int i = 0; i < detections_boxes_.size(); i++)
     {
-        auto detection = output[i];
-        auto box = detection.bbox;
-        auto class_id = detection.class_id;
-        auto conf = detection.conf;
+        Detection detection = detections_boxes_[i];
+        int class_id = detection.class_id;
+        float conf = detection.conf;
         cv::Scalar color = cv::Scalar(COLORS[class_id][0], COLORS[class_id][1], COLORS[class_id][2]);
-
-        if (ratio_h > ratio_w)
-        {
-            box.x = box.x / ratio_w;
-            box.y = (box.y - (input_h - ratio_w * image.rows) / 2) / ratio_w;
-            box.width = box.width / ratio_w;
-            box.height = box.height / ratio_w;
-        }
-        else
-        {
-            box.x = (box.x - (input_w - ratio_h * image.cols) / 2) / ratio_h;
-            box.y = box.y / ratio_h;
-            box.width = box.width / ratio_h;
-            box.height = box.height / ratio_h;
-        }
-
-        rectangle(image, cv::Point(box.x, box.y), cv::Point(box.x + box.width, box.y + box.height), color, 3);
+        
+        rectangle(image, cv::Point(detection.x0, detection.y0), cv::Point(detection.x1, detection.y1), color, 3);
 
         // Detection box text
         std::string class_string = CLASS_NAMES[class_id] + ' ' + std::to_string(conf).substr(0, 4);
         cv::Size text_size = cv::getTextSize(class_string, cv::FONT_HERSHEY_DUPLEX, 1, 2, 0);
-        cv::Rect text_rect(box.x, box.y - 40, text_size.width + 10, text_size.height + 20);
+        cv::Rect text_rect(detection.x0, detection.y0 - 40, text_size.width + 10, text_size.height + 20);
         rectangle(image, text_rect, color, cv::FILLED);
-        putText(image, class_string, cv::Point(box.x + 5, box.y - 10), cv::FONT_HERSHEY_DUPLEX, 1, cv::Scalar(0, 0, 0), 2, 0);
+        putText(image, class_string, cv::Point(detection.x0 + 5, detection.y0 - 10), cv::FONT_HERSHEY_DUPLEX, 1, cv::Scalar(0, 0, 0), 2, 0);
     }
+
+    // save inferd img
+    std::string result_path = makeOutputPath(input_image_path_, "../results");
+    // result_path = "../../results/car.jpg"
+    cv::imwrite(result_path , image);
+}
+
+void YOLOv11::parseDetections(const float *output, std::vector<Detection> &detections)
+{
+    // const float* data = output + num_detections * detection_attribute_size;
+    for (int i = 0; i < num_detections; ++i) {
+        // const float* row = data + i * detection_attribute_size;
+        const float* detection = output + i * detection_attribute_size;
+        float conf = detection[4];
+        if (conf < conf_threshold_) continue;
+        
+        float x0 = detection[0];
+        float y0 = detection[1];
+        float x1 = detection[2];
+        float y1 = detection[3];
+
+        if (false) {
+            const float cx = detection[0];
+            const float cy = detection[1];
+            const float ow = detection[2];
+            const float oh = detection[3];
+            x0 = static_cast<int>((cx));
+            y0 = static_cast<int>((cy));
+            x1 = static_cast<int>(x0 + ow);
+            y1 = static_cast<int>(y0 + oh);
+        }
+
+        int cls = static_cast<int>(detection[5]);
+
+        preprocess::affine_transformation(preprocess::affine_matrix.reverse, x0, y0, &x0, &y0);
+        preprocess::affine_transformation(preprocess::affine_matrix.reverse, x1, y1, &x1, &y1);
+        
+        detections.push_back({x0, y0, x1, y1, conf, cls});
+    }
+
 }

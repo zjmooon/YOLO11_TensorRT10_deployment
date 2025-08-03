@@ -1,5 +1,4 @@
-#ifndef COMMON_H
-#define COMMON_H
+#pragma once
 
 #include <cuda_runtime_api.h>
 #include "NvInfer.h"
@@ -91,4 +90,15 @@ class Logger : public nvinfer1::ILogger {
     }
 };
 
-#endif
+inline std::string getFilenameFromPath(const std::string& path) {
+    size_t pos = path.find_last_of("/\\");
+    return (pos == std::string::npos) ? path : path.substr(pos + 1);
+}
+
+inline std::string makeOutputPath(const std::string& inputPath, const std::string& newDir) {
+    std::string filename = getFilenameFromPath(inputPath);
+    if (newDir.back() == '/' || newDir.back() == '\\')
+        return newDir + filename;
+    else
+        return newDir + "/" + filename;
+}

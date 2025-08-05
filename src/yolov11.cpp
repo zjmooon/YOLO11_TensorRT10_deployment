@@ -76,14 +76,18 @@ void YOLOv11::init(std::string engine_path)
     // Initialize input buffers
     cpu_outpu_.resize(num_detections * detection_attribute_size);
     
-    float* raw_ptr = nullptr;
-    CUDA_CHECK(cudaMalloc(reinterpret_cast<void**>(&raw_ptr), 3 * input_w * input_h * sizeof(float)));
-    gpu_input_.reset(raw_ptr);
+    // float* raw_ptr = nullptr;
+    // CUDA_CHECK(cudaMalloc(reinterpret_cast<void**>(&raw_ptr), 3 * input_w * input_h * sizeof(float)));
+    // gpu_input_.reset(raw_ptr);
+    gpu_input_.reset(nullptr);
+    CUDA_CHECK(cudaMalloc(reinterpret_cast<void**>(&gpu_input_), 3 * input_w * input_h * sizeof(float)));
 
-    raw_ptr = nullptr;
-    CUDA_CHECK(cudaMalloc(reinterpret_cast<void**>(&raw_ptr), detection_attribute_size * num_detections * sizeof(float)));
-    gpu_output_.reset(raw_ptr);
-
+    // raw_ptr = nullptr;
+    // CUDA_CHECK(cudaMalloc(reinterpret_cast<void**>(&raw_ptr), detection_attribute_size * num_detections * sizeof(float)));
+    // gpu_output_.reset(raw_ptr);
+    gpu_output_.reset(nullptr);
+    CUDA_CHECK(cudaMalloc(reinterpret_cast<void**>(&gpu_output_), detection_attribute_size * num_detections * sizeof(float)));
+    
     detections_boxes_.reserve(num_detections);
 
     // cuda_preprocess_init(MAX_IMAGE_SIZE);

@@ -52,9 +52,12 @@ namespace preprocess{
 
 extern  TransInfo    trans;
 extern  AffineMatrix2 affine_matrix;
+// void drawBoxesOnGpu();
 
-void preprocess_resize_gpu(cv::Mat &h_src, float* d_dst, int dst_h, int dst_w, cudaStream_t stream);
+// VERSION 1
+void cuda_preprocess(cv::Mat &h_src, float* d_dst, int dst_h, int dst_w, cudaStream_t stream);
 
+// VERSION 2
 void cuda_preprocess_init(int max_image_size);
 void cuda_preprocess_destroy();
 void cuda_preprocess(uint8_t* src, int src_width, int src_height,

@@ -6,7 +6,8 @@
 
 
 static Logger logger;
-const int MAX_IMAGE_SIZE = 4096 * 4096;
+constexpr int MAX_IMAGE_SIZE = 4096 * 4096;
+constexpr int VERSION = 1;
 
 YOLOv11::YOLOv11(std::string model_path)
 {
@@ -70,37 +71,27 @@ void YOLOv11::init(std::string engine_path)
     // }
     // std::cout << std::endl;
 
-
-    // assume the box outputs no more than 1000 boxes that conf >= nms; (1000)
-    // left, top, right, bottom, confidence, class, keepflag(whether drop when NMS), 32 masks (7+32)
-    // Initialize input buffers
+    // For cpu output buffer, gpu input&output buffer  
     cpu_outpu_.resize(num_detections * detection_attribute_size);
-    
-    // float* raw_ptr = nullptr;
-    // CUDA_CHECK(cudaMalloc(reinterpret_cast<void**>(&raw_ptr), 3 * input_w * input_h * sizeof(float)));
-    // gpu_input_.reset(raw_ptr);
+
     gpu_input_.reset(nullptr);
     CUDA_CHECK(cudaMalloc(reinterpret_cast<void**>(&gpu_input_), 3 * input_w * input_h * sizeof(float)));
 
-    // raw_ptr = nullptr;
-    // CUDA_CHECK(cudaMalloc(reinterpret_cast<void**>(&raw_ptr), detection_attribute_size * num_detections * sizeof(float)));
-    // gpu_output_.reset(raw_ptr);
     gpu_output_.reset(nullptr);
     CUDA_CHECK(cudaMalloc(reinterpret_cast<void**>(&gpu_output_), detection_attribute_size * num_detections * sizeof(float)));
     
     detections_boxes_.reserve(num_detections);
 
-    // cuda_preprocess_init(MAX_IMAGE_SIZE);
+    if (VERSION == 2) preprocess::cuda_preprocess_init(MAX_IMAGE_SIZE);
 }
 
 YOLOv11::~YOLOv11(){
-    // cuda_preprocess_destroy();
+    if (VERSION == 2) preprocess::cuda_preprocess_destroy();
 }
 
 void YOLOv11::preprocess(cv::Mat& image) {
-    // Preprocessing data on gpu
-    preprocess::preprocess_resize_gpu(image, gpu_input_.get(), input_h, input_w, *stream_);
-    // cuda_preprocess(image.ptr(), image.cols, image.rows, gpu_input_.get(), input_w, input_h, *stream_);
+    preprocess::cuda_preprocess(image, gpu_input_.get(), input_h, input_w, *stream_);
+    // preprocess::cuda_preprocess(image.ptr(), image.cols, image.rows, gpu_input_.get(), input_w, input_h, *stream_);
 }
 
 void YOLOv11::infer(cv::Mat &img)
@@ -108,14 +99,14 @@ void YOLOv11::infer(cv::Mat &img)
     preprocess(img);
     CUDA_CHECK(cudaStreamSynchronize(*stream_));
 
-    // bingding GPU input&output
+    // binding GPU input&output
     context_->setTensorAddress(engine_->getIOTensorName(0), gpu_input_.get());
     context_->setTensorAddress(engine_->getIOTensorName(engine_->getNbIOTensors() - 1), gpu_output_.get());
     context_->enqueueV3(*stream_);
     CUDA_CHECK(cudaStreamSynchronize(*stream_));
 
     postprocess();
-    draw(img);
+    drawBoxesOnCpu(img);
 }
 
 void YOLOv11::postprocess()
@@ -131,7 +122,7 @@ void YOLOv11::postprocess()
     // }
 }
 
-void YOLOv11::draw(cv::Mat& image)
+void YOLOv11::drawBoxesOnCpu(cv::Mat& image)
 {
     for (int i = 0; i < detections_boxes_.size(); i++)
     {

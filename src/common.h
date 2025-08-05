@@ -2,6 +2,7 @@
 
 #include <cuda_runtime_api.h>
 #include "NvInfer.h"
+#include <opencv2/opencv.hpp>
 
 const std::vector<std::string> CLASS_NAMES = {
     "person",         "bicycle",    "car",           "motorcycle",    "airplane",     "bus",           "train",
@@ -101,4 +102,45 @@ inline std::string makeOutputPath(const std::string& inputPath, const std::strin
         return newDir + filename;
     else
         return newDir + "/" + filename;
+}
+
+// 将 float* (GPU) 中的数据保存为图片
+inline void saveCudaImage(
+    float* d_dst,          // CUDA memory: float[NCHW], RGB, [0,1]
+    int width, int height, const std::string& save_path, cudaStream_t stream = nullptr) {
+
+    size_t imageSize = width * height * 3;
+    
+    // 分配 host 内存（float 格式）
+    std::vector<float> h_float(imageSize);
+
+    // 从 device 拷贝到 host
+    CUDA_CHECK(cudaMemcpyAsync(
+        h_float.data(), d_dst,
+        imageSize * sizeof(float),
+        cudaMemcpyDeviceToHost, stream
+    ));
+    
+    CUDA_CHECK(cudaStreamSynchronize(stream));
+
+    // float[NCHW] -> uint8_t[HWC]
+    cv::Mat image(height, width, CV_8UC3);
+    int area = width * height;
+
+    for (int y = 0; y < height; ++y) {
+        uint8_t* ptr = image.ptr<uint8_t>(y);
+        for (int x = 0; x < width; ++x) {
+            int idx = y * width + x;
+            float r = h_float[idx + area * 0];
+            float g = h_float[idx + area * 1];
+            float b = h_float[idx + area * 2];
+
+            // [0,1] -> [0,255] + clip
+            ptr[x * 3 + 0] = static_cast<uint8_t>(std::min(std::max(b * 255.0f, 0.0f), 255.0f));
+            ptr[x * 3 + 1] = static_cast<uint8_t>(std::min(std::max(g * 255.0f, 0.0f), 255.0f));
+            ptr[x * 3 + 2] = static_cast<uint8_t>(std::min(std::max(r * 255.0f, 0.0f), 255.0f));
+        }
+    }
+
+    cv::imwrite(save_path, image);
 }

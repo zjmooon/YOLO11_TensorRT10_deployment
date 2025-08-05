@@ -23,7 +23,7 @@ __host__ __device__ void affine_transformation(
 }
 
 __global__ void warpaffine_BGR2RGB_kernel(
-    float* tar, uint8_t* src, 
+    float* dst, uint8_t* src, 
     TransInfo trans,
     AffineMatrix2 affine_matrix)
 {
@@ -57,19 +57,19 @@ __global__ void warpaffine_BGR2RGB_kernel(
         int tarIdx    = y * trans.tar_w  + x;
         int tarArea   = trans.tar_w * trans.tar_h;
 
-        tar[tarIdx + tarArea * 0] = 
+        dst[tarIdx + tarArea * 0] = 
             round((a1_1 * src[srcIdx1_1 + 2] + 
                    a1_2 * src[srcIdx1_2 + 2] +
                    a2_1 * src[srcIdx2_1 + 2] +
                    a2_2 * src[srcIdx2_2 + 2])) / 255.0f;
 
-        tar[tarIdx + tarArea * 1] = 
+        dst[tarIdx + tarArea * 1] = 
             round((a1_1 * src[srcIdx1_1 + 1] + 
                    a1_2 * src[srcIdx1_2 + 1] +
                    a2_1 * src[srcIdx2_1 + 1] +
                    a2_2 * src[srcIdx2_2 + 1])) / 255.0f;
 
-        tar[tarIdx + tarArea * 2] = 
+        dst[tarIdx + tarArea * 2] = 
             round((a1_1 * src[srcIdx1_1 + 0] + 
                    a1_2 * src[srcIdx1_2 + 0] +
                    a2_1 * src[srcIdx2_1 + 0] +
@@ -101,7 +101,7 @@ __global__ void bilinear_BGR2RGB_nhwc2nchw_shift_kernel(
         float th   = (float)y * scale - src_y1;
         float tw   = (float)x * scale - src_x1;
 
-        // bilinear interpolation -- 计算面积(这里建议自己手画一张图来理解一下)
+        // bilinear interpolation -- 计算面积
         float a1_1 = (1.0 - tw) * (1.0 - th);  // 右下
         float a1_2 = tw * (1.0 - th);          // 左下
         float a2_1 = (1.0 - tw) * th;          // 右上
@@ -231,7 +231,7 @@ __global__ void warpaffine_kernel(
     *pdst_c2 = c2;
 }
 
-void preprocess_resize_gpu(cv::Mat &h_src, float* d_dst, int dst_h, int dst_w, cudaStream_t stream) {
+void cuda_preprocess(cv::Mat &h_src, float* d_dst, int dst_h, int dst_w, cudaStream_t stream) {
     uint8_t* d_src = nullptr;
 
     // input image hw
@@ -253,7 +253,15 @@ void preprocess_resize_gpu(cv::Mat &h_src, float* d_dst, int dst_h, int dst_w, c
     dim3 dimBlock(32, 32);
     dim3 dimGrid(CEIL(dst_w, 32), CEIL(dst_h, 32));
    
-    if (false) {
+    if (true) {
+        warpaffine_init(height, width, dst_h, dst_w);
+        warpaffine_BGR2RGB_kernel <<<dimGrid, dimBlock, 0, stream>>> 
+        (d_dst, d_src, trans, affine_matrix);  
+        // save preprocess
+        if (false)  saveCudaImage(d_dst, dst_w, dst_h, "../results/preprocess.jpg", stream); 
+         
+    }
+    else {
         //scaled resize
         float scaled_h = (float)height / dst_h;
         float scaled_w = (float)width / dst_w;
@@ -261,15 +269,8 @@ void preprocess_resize_gpu(cv::Mat &h_src, float* d_dst, int dst_h, int dst_w, c
 
         bilinear_BGR2RGB_nhwc2nchw_shift_kernel 
                     <<<dimGrid, dimBlock, 0, stream>>> 
-                    (d_dst, d_src, dst_w, dst_h, width, height, scale);        
+                    (d_dst, d_src, dst_w, dst_h, width, height, scale);    
     }
-    else {
-        warpaffine_init(height, width, dst_h, dst_w);
-        warpaffine_BGR2RGB_kernel <<<dimGrid, dimBlock, 0, stream>>> 
-        (d_dst, d_src, trans, affine_matrix);
-    }
-
-
 
     CUDA_CHECK(cudaStreamSynchronize(stream));
     CUDA_CHECK(cudaFree(d_src));

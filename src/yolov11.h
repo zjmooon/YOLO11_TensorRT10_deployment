@@ -12,7 +12,6 @@ struct Detection
 
 class YOLOv11
 {
-
 public:
 
     YOLOv11(std::string model_path);
@@ -36,8 +35,8 @@ private:
 
     void preprocess(cv::Mat& image);
     void postprocess();
-    void draw(cv::Mat& image);
     void parseDetections(const float* output, std::vector<Detection>& result);
+    void drawBoxesOnCpu(cv::Mat& image);
 
     // Model parameters
     int input_w;
@@ -47,9 +46,7 @@ private:
     float conf_threshold_ = 0.4f;
     std::vector<Detection> detections_boxes_;
     
-
     std::vector<cv::Scalar> colors;
-
 };
 
 #endif

@@ -7,8 +7,8 @@ int main()
     // init model
     YOLOv11 model("../Models/yolo11l_fp16.trt");
 
-    if (false){
-        model.input_image_path_ = "../asset/crossroad.jpg";
+    if (true){
+        model.input_image_path_ = "../asset/car.jpg";
         cv::Mat image = cv::imread(model.input_image_path_);
         if (image.empty()) std::cerr << "Error reading image: " << std::endl;
         model.infer(image);
@@ -18,7 +18,7 @@ int main()
     }
     
 
-    if (true) {
+    if (false) {
         std::string video_path = "../asset/road1.mp4"; 
         cv::VideoCapture cap(video_path);
 

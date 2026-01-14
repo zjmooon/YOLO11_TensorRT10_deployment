@@ -3,7 +3,8 @@
 #include <cuda_runtime.h>
 #include <opencv2/opencv.hpp>
 
-struct TransInfo{
+struct TransInfo
+{
     int src_w = 0;
     int src_h = 0;
     int tar_w = 0;
@@ -13,7 +14,8 @@ struct TransInfo{
         src_w(srcW), src_h(srcH), tar_w(tarW), tar_h(tarH){}
 };
 
-struct AffineMatrix2{
+struct AffineMatrix2
+{
     float forward[6];
     float reverse[6];
     float forward_scale;
@@ -48,7 +50,8 @@ struct AffineMatrix2{
     }
 };
 
-namespace preprocess{
+namespace preprocess
+{
 
 extern  TransInfo    trans;
 extern  AffineMatrix2 affine_matrix;
@@ -56,6 +59,7 @@ extern  AffineMatrix2 affine_matrix;
 
 // VERSION 1
 void cuda_preprocess(cv::Mat &h_src, float* d_dst, int dst_h, int dst_w, cudaStream_t stream);
+__host__ __device__ void affine_transformation(float* trans_matrix, int src_x, int src_y, float* tar_x, float* tar_y);
 
 // VERSION 2
 void cuda_preprocess_init(int max_image_size);
@@ -64,5 +68,4 @@ void cuda_preprocess(uint8_t* src, int src_width, int src_height,
     float* dst, int dst_width, int dst_height,
     cudaStream_t stream);
 
-__host__ __device__ void affine_transformation(float* trans_matrix, int src_x, int src_y, float* tar_x, float* tar_y);
 } // namespace preprocess

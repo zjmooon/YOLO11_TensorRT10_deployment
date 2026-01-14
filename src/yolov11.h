@@ -1,5 +1,4 @@
-#ifndef YOLO11_H
-#define YOLO11_H
+#pragma once
 
 #include <opencv2/opencv.hpp>
 #include "common.h"
@@ -18,7 +17,6 @@ public:
     ~YOLOv11();
 
     void infer(cv::Mat &img);
-    std::string input_image_path_;
 private:
     void init(std::string engine_path);
 
@@ -39,8 +37,8 @@ private:
     void drawBoxesOnCpu(cv::Mat& image);
 
     // Model parameters
-    int input_w;
-    int input_h;
+    int input_w_;
+    int input_h_;
     int num_detections;
     int detection_attribute_size;
     float conf_threshold_ = 0.4f;
@@ -48,5 +46,3 @@ private:
     
     std::vector<cv::Scalar> colors;
 };
-
-#endif

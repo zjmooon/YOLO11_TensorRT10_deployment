@@ -7,7 +7,7 @@
 
 static Logger logger;
 constexpr int MAX_IMAGE_SIZE = 4096 * 4096;
-constexpr int VERSION = 1;
+constexpr int VERSION = 2;
 
 YOLOv11::YOLOv11(std::string model_path)
 {
@@ -18,6 +18,10 @@ void YOLOv11::init(std::string engine_path)
 {
     // Read the engine file
     std::ifstream engineStream(engine_path, std::ios::binary);
+    if (!engineStream.good()) {
+        std::cout << "Error reading engine file: " << engine_path << std::endl;
+        return;
+    }
     engineStream.seekg(0, std::ios::end);
     const size_t modelSize = engineStream.tellg();
     engineStream.seekg(0, std::ios::beg);
